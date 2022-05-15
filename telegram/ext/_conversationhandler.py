@@ -294,6 +294,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         conversation_timeout: Union[float, datetime.timedelta] = None,
         name: str = None,
         persistent: bool = False,
+        cache=False,
         map_to_parent: Dict[object, object] = None,
         block: DVInput[bool] = DEFAULT_TRUE,
     ):
@@ -333,6 +334,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         if persistent and not self.name:
             raise ValueError("Conversations can't be persistent when handler is unnamed.")
         self._persistent: bool = persistent
+        if cache and not self.name:
+            raise ValueError("Conversations can't be cached when handler is unnamed.")
+        self.cache = cache
 
         if not any((self.per_user, self.per_chat, self.per_message)):
             raise ValueError("'per_user', 'per_chat' and 'per_message' can't all be 'False'")
@@ -698,7 +702,10 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             return None
 
         key = self._get_key(update)
-        state = self._conversations.get(key)
+        if self.cache:
+            state = self.cache.get(f"{self.name}-{key}")
+        else:
+            state = self.conversations.get(key)
         check: Optional[object] = None
 
         # Resolve futures
@@ -709,7 +716,10 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             if state.done():
                 res = state.resolve()
                 self._update_state(res, key)
-                state = self._conversations.get(key)
+                if self.cache:
+                    state = self.cache.get(f"{self.name}-{key}")
+                else:
+                    state = self._conversations.get(key)
 
             # if not then handle WAITING state instead
             else:
@@ -861,12 +871,20 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         if new_state == self.END:
             if key in self._conversations:
                 # If there is no key in conversations, nothing is done.
-                del self._conversations[key]
+                if self.cache:
+                    self.cache.set(f'{self.name}-{key}', None)
+                else:
+                    del self._conversations[key]
 
         elif isinstance(new_state, asyncio.Task):
-            self._conversations[key] = PendingState(
-                old_state=self._conversations.get(key), task=new_state
-            )
+            if self.cache:
+                self.cache.set(f'{self.name}-{key}', PendingState(
+                    old_state=self._conversations.get(key), task=new_state
+                ))
+            else:
+                self._conversations[key] = PendingState(
+                    old_state=self._conversations.get(key), task=new_state
+                )
 
         elif new_state is not None:
             if new_state not in self.states:
@@ -875,7 +893,10 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     f"ConversationHandler{' ' + self.name if self.name is not None else ''}.",
                     stacklevel=2,
                 )
-            self._conversations[key] = new_state
+            if self.cache:
+                self.cache.set(f'{self.name}-{key}', new_state)
+            else:
+                self._conversations[key] = new_state
 
     async def _trigger_timeout(self, context: CallbackContext) -> None:
         """This is run whenever a conversation has timed out. Also makes sure that all handlers
