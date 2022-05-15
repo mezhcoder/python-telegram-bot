@@ -201,10 +201,11 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
     def set_cache_user_data(self, key, value):
         if self._application.cache is None:
             raise Exception("Cache is not initialize in Dispatcher, use 'user_data' property instead")
-        user_data = self._dispatcher.cache.get(self._user_id)
+        user_data = self._application.cache.get(self._user_id)
         if user_data is None:
             user_data = defaultdict(dict)
         user_data[key] = value
+        self._application.cache.set(self._user_id, user_data)
 
     async def refresh_data(self) -> None:
         """If :attr:`application` uses persistence, calls
