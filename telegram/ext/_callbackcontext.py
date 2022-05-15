@@ -33,6 +33,7 @@ from typing import (
 
 from telegram._callbackquery import CallbackQuery
 from telegram._update import Update
+from collections import defaultdict
 from telegram.ext._extbot import ExtBot
 from telegram.ext._utils.types import BD, BT, CD, UD
 
@@ -111,6 +112,8 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
         "_application",
         "_chat_id_and_data",
         "_user_id_and_data",
+        "_chat_id",
+        "_user_id",
         "args",
         "matches",
         "error",
@@ -123,6 +126,8 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
         self._application = application
         self._chat_id_and_data: Optional[Tuple[int, CD]] = None
         self._user_id_and_data: Optional[Tuple[int, UD]] = None
+        self._chat_id = None
+        self._user_id = None
         self.args: Optional[List[str]] = None
         self.matches: Optional[List[Match]] = None
         self.error: Optional[Exception] = None
@@ -184,6 +189,22 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
         raise AttributeError(
             f"You can not assign a new value to user_data, see {_STORING_DATA_WIKI}"
         )
+
+    def cache_user_data(self, key):
+        if self._application.cache is None:
+            raise Exception("Cache is not initialize in Dispatcher, use 'user_data' property instead")
+        user_data = self._application.cache.get(self._user_id)
+        if user_data is None:
+            return None
+        return user_data[key]
+
+    def set_cache_user_data(self, key, value):
+        if self._application.cache is None:
+            raise Exception("Cache is not initialize in Dispatcher, use 'user_data' property instead")
+        user_data = self._dispatcher.cache.get(self._user_id)
+        if user_data is None:
+            user_data = defaultdict(dict)
+        user_data[key] = value
 
     async def refresh_data(self) -> None:
         """If :attr:`application` uses persistence, calls
@@ -299,13 +320,18 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
 
         if update is not None and isinstance(update, Update):
             chat = update.effective_chat
+            self._chat_id = chat.id
             user = update.effective_user
+            self._user_id = user.id
 
             if chat:
                 self._chat_id_and_data = (
                     chat.id,
                     application.chat_data[chat.id],
                 )
+            if self._application.cache is None:
+                if user:
+                    self._user_data = application.user_data[user.id]
             if user:
                 self._user_id_and_data = (
                     user.id,

@@ -208,6 +208,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AbstractAsyncContextManager)
         "handlers",
         "job_queue",
         "persistence",
+        "cache"
         "update_queue",
         "updater",
         "user_data",
@@ -222,6 +223,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AbstractAsyncContextManager)
         job_queue: JQ,
         concurrent_updates: Union[bool, int],
         persistence: Optional[BasePersistence],
+        cache=None,
         context_types: ContextTypes[CCT, UD, CD, BD],
     ):
         if not was_called_by(
@@ -238,6 +240,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AbstractAsyncContextManager)
         self.context_types = context_types
         self.updater = updater
         self.handlers: Dict[int, List[BaseHandler]] = {}
+        self.cache = cache
         self.error_handlers: Dict[Callable, Union[bool, DefaultValue]] = {}
 
         if isinstance(concurrent_updates, int) and concurrent_updates < 0:
