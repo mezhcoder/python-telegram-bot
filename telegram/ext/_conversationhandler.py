@@ -703,9 +703,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
         key = self._get_key(update)
         if self.cache:
-            state = self.cache.get(f"{self.name}-{key}")
+            state = self.cache.get(f"{self.name}-{key[0]}-{key[1]}")
         else:
-            state = self.conversations.get(key)
+            state = self._conversations.get(key)
         check: Optional[object] = None
 
         # Resolve futures
@@ -717,7 +717,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                 res = state.resolve()
                 self._update_state(res, key)
                 if self.cache:
-                    state = self.cache.get(f"{self.name}-{key}")
+                    state = self.cache.get(f"{self.name}-{key[0]}-{key[1]}")
                 else:
                     state = self._conversations.get(key)
 
@@ -872,15 +872,16 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             if key in self._conversations:
                 # If there is no key in conversations, nothing is done.
                 if self.cache:
-                    self.cache.set(f'{self.name}-{key}', None)
+                    self.cache.set(f'{self.name}-{key[0]}-{key[1]}', PendingState(
+                        old_state=self._conversations.get(key), task=None
+                    ))
                 else:
                     del self._conversations[key]
 
         elif isinstance(new_state, asyncio.Task):
             if self.cache:
-                self.cache.set(f'{self.name}-{key}', PendingState(
-                    old_state=self._conversations.get(key), task=new_state
-                ))
+                old_state = self.cache.get(f'{self.name}-{key[0]}-{key[1]}')
+                self.cache.set(f'{self.name}-{key[0]}-{key[1]}', (old_state, new_state))
             else:
                 self._conversations[key] = PendingState(
                     old_state=self._conversations.get(key), task=new_state
@@ -894,7 +895,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     stacklevel=2,
                 )
             if self.cache:
-                self.cache.set(f'{self.name}-{key}', new_state)
+                self.cache.set(f'{self.name}-{key[0]}-{key[1]}', PendingState(
+                    old_state=self._conversations.get(key), task=new_state
+                ))
             else:
                 self._conversations[key] = new_state
 
